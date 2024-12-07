@@ -249,7 +249,7 @@ Load it using your preferred Emacs package manager, e.g., for Doom Emacs:
 ```emacs-lisp
 ;; packages.el
 
-(package! neil :recipe (:host github :repo "babashka/neil" :files ("*.el")))
+(package! neil)
 
 ;; config.el
 
@@ -257,7 +257,12 @@ Load it using your preferred Emacs package manager, e.g., for Doom Emacs:
   :config 
   (setq neil-prompt-for-version-p nil
         neil-inject-dep-to-project-p t))
+```
 
+Optionally, you may enable hot-loading the lib after finding it (requires CIDER and at least Clojure 1.12.0-alpha2)
+
+```emacs-lisp
+(add-hook 'neil-after-find-clojure-package-hook #'neil-cider-load-lib)
 ```
 
 ## Github's Rate Limit

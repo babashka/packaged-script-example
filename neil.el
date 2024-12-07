@@ -5,11 +5,11 @@
 ;; Author: Ag Ibragimov <agzam.ibragimov@gmail.com>
 ;; Maintainer: Ag Ibragimov <agzam.ibragimov@gmail.com>
 ;; Created: April 20, 2022
-;; Modified: April 20, 2022
+;; Modified: May 01, 2024
 ;; Version: 0.0.1
 ;; Keywords: convenience tools
 ;; Homepage: https://github.com/babashka/neil
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "28.1"))
 ;; SPDX-License-Identifier: MIT
 
 ;;; Commentary:
@@ -41,6 +41,13 @@ Otherwise uses the given value."
   :type 'string
   :group 'neil)
 
+(defcustom neil-after-find-clojure-package-hook nil
+  "Runs after successfully resolving dependency.
+Hook function takes a single parameter:
+lib coords string - typically like: \"cheshire/cheshire {:mvn/version \"5.13.0\"}\"."
+  :type 'string
+  :group 'neil)
+
 (defun neil--identify-project-build-tool ()
   "Find build tools used in the project."
   (let* ((default-directory (or (when (fboundp 'projectile-project-root)
@@ -61,6 +68,31 @@ Otherwise uses the given value."
   "Annotate dependency S with its version."
   (let-alist (cdr (assoc s minibuffer-completion-table))
     (concat "   " .version "    " .description)))
+
+(defun neil-cider-load-lib (coords)
+  "Hot-load a Clojure lib NAME into current cider session.
+COORDS must be lib coords string, something
+like: \"cheshire/cheshire {:mvn/version \"5.13.0\"}\"."
+  ;; fbound checks are intentionally verbose to avoid issues with Flycheck and
+  ;; to ensure the package does not depend on CIDER.
+  (cond
+   ((not (fboundp 'cider))
+    (message "CIDER not installed"))
+   ((not (and (fboundp 'cider-connected-p) (cider-connected-p)))
+    (message "CIDER not connected"))
+   ((not (and (fboundp 'cider-project-type)
+              (eq 'clojure-cli (cider-project-type))))
+    (message "Has to be deps.edn project for hot-loading"))
+   ((not (and (fboundp 'cider--clojure-version)
+              (version< "1.12.0-alpha2" (cider--clojure-version))))
+    (message "You need at least 1.12.0-alpha2 of Clojure for hot-loading dependencies"))
+   ((and (fboundp 'nrepl-dict-get)
+         (fboundp 'cider-sync-tooling-eval)
+         (fboundp 'cider--clojure-version))
+      (when-let* ((clj-form (format "(add-libs '{%s})" coords))
+                  (msg (nrepl-dict-get (cider-sync-tooling-eval clj-form) "value")))
+        (with-temp-message "loaded: %s" msg)
+        nil))))
 
 ;;;###autoload
 (defun neil-find-clojure-package (&optional term)
@@ -141,6 +173,8 @@ the dependency to the project (deps.edn only)."
       (funcall
        perform-action exe
        (format "dep add :lib %s :version %s" lib-name version)))
+
+    (run-hook-with-args 'neil-after-find-clojure-package-hook dep-str)
 
     (kill-new dep-str)
     (message dep-str)))
